@@ -1,0 +1,69 @@
+---
+title: "Prediction Assignment Writeup"
+author: "yi zheng"
+date: "July 28, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Background  
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.  
+More information is available from the website here: [link]http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+# Data Cleaning
+
+```{r,message=FALSE,warning=FALSE}
+library(tidyverse)
+train<-read_csv('pml-training.csv')
+test<-read_csv('pml-testing.csv')
+apply(train,2,function(x){ sum(is.na(x))})
+train1<- train[apply(train,2,function(x){ sum(is.na(x))})==0] %>%
+        select(-(1:5))
+test1<-test[apply(train,2,function(x){ sum(is.na(x))})==0] %>%
+        select(-(1:5),-ncol(test))
+```
+the outcome variable classe with values are:  
+*exactly according to the specification(A)
+*throwing the elbows to the front(B)
+*lifting the dumbbell only halfway (C)
+*lowering the dumbbell only halfway (D)
+*throwing the hips to the front (E)
+
+# Model 
+1. partition the data
+First lets use training dataset to split into train set and validation set. In order to test the out of sample error and 5-fold cross validation to avoid overfitting.
+```{r,message=FALSE}
+library(caret)
+index<-createDataPartition(train1$classe,p=0.6,list=F)
+traindf<-train1[index,]
+validationdf<-train1[-index,]
+```
+
+2. Ensemble Model: random forest
+```{r,message=FALSE,warning=FALSE}
+library(randomForest)
+set.seed(12345)
+rf<-train(classe~.,traindf,method='rf',verbose=F,ntree=300,
+          trControl=trainControl(method="cv", number=5, allowParallel=T, verbose=T))
+rf
+pred_rf<-predict(rf,validationdf)
+confusionMatrix(pred_rf,validationdf$classe)
+```
+3. Ensemble Model: Gradient boosting
+```{r,message=FALSE,warning=FALSE}
+gbm<-train(classe~.,data=traindf, method="gbm", verbose=F,
+           trControl=trainControl(method="cv", number=5, allowParallel=T, verbose=T))
+gbm
+predict_gbm<-predict(gbm, newdata=validationdf)
+confusionMatrix(predict_gbm, validationdf$classe)
+```
+
+# Now lets apply our model on the test data
+```{r}
+predict(gbm,test1[,-ncol(test1)])
+predict(rf,test1[,-ncol(test1)])
+```
+
